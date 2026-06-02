@@ -1,171 +1,136 @@
 pipeline {
 
-    agent any
+```
+agent any
 
-    environment {
+environment {
+    AWS_REGION = 'ap-south-1'
+    AWS_ACCOUNT_ID = '330372999051'
+    ECR_REPO = 'python-demo'
+    IMAGE_TAG = "${BUILD_NUMBER}"
+}
 
-        AWS_REGION = 'ap-south-1'
+stages {
 
-        AWS_ACCOUNT_ID = '330372999051'
-
-        ECR_REPO = 'python-demo'
-
-        IMAGE_TAG = "${BUILD_NUMBER}"
-
+    stage('Checkout') {
+        steps {
+            echo "Checking out code..."
+            checkout scm
+        }
     }
 
-    stages {
+    stage('Install Dependencies') {
+        steps {
+            echo "Installing dependencies..."
+            bat 'python --version'
+        }
+    }
 
-        stage('Checkout') {
+    stage('Build') {
+        steps {
+            echo "Application Build Successful"
+        }
+    }
 
-            steps {
+    stage('Print Test Statement') {
+        steps {
+            echo "CI TEST PASSED"
+        }
+    }
 
-                echo "Checking out code..."
+    stage('Run Tests') {
+        steps {
+            echo "Executing Unit Tests"
+        }
+    }
 
-                checkout scm
+    stage('AWS Login') {
+        steps {
 
+            withCredentials([
+                string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
+                string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY'),
+                string(credentialsId: 'aws-session-token', variable: 'AWS_SESSION_TOKEN')
+            ]) {
+
+                bat '''
+                aws sts get-caller-identity
+                '''
             }
         }
+    }
 
-        stage('Install Dependencies') {
-
-            steps {
-
-                echo "Installing dependencies..."
-
-                
-
+    stage('Terraform Init') {
+        steps {
+            dir('terraform') {
+                bat 'terraform init'
             }
         }
+    }
 
-        stage('Build') {
-
-            steps {
-
-                echo "Application Build Successful"
+    stage('Terraform Validate') {
+        steps {
+            dir('terraform') {
+                bat 'terraform validate'
             }
         }
+    }
 
-        stage('Print Test Statement') {
-
-            steps {
-
-                echo "CI TEST PASSED"
+    stage('Terraform Plan') {
+        steps {
+            dir('terraform') {
+                bat 'terraform plan'
             }
         }
+    }
 
-        stage('Run Tests') {
-
-            steps {
-
-                echo "Executing Unit Tests"
-
-                
-            }
+    stage('Docker Build') {
+        steps {
+            bat "docker build -t ${ECR_REPO}:${IMAGE_TAG} ."
         }
+    }
 
-        stage('AWS Login') {
+    stage('ECR Login') {
 
-            steps {
+        steps {
 
-                withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds']
-                ]) {
-
-                    bat '''
-                    aws sts get-caller-identity
-                    '''
-                }
-            }
-        }
-
-        stage('Terraform Init') {
-
-            steps {
-
-                dir('terraform') {
-
-                    bat 'terraform init'
-                }
-            }
-        }
-
-        stage('Terraform Validate') {
-
-            steps {
-
-                dir('terraform') {
-
-                    bat 'terraform validate'
-                }
-            }
-        }
-
-        stage('Terraform Plan') {
-
-            steps {
-
-                dir('terraform') {
-
-                    bat 'terraform plan'
-                }
-            }
-        }
-
-        stage('Docker Build') {
-
-            steps {
+            withCredentials([
+                string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
+                string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY'),
+                string(credentialsId: 'aws-session-token', variable: 'AWS_SESSION_TOKEN')
+            ]) {
 
                 bat """
-                docker build -t ${ECR_REPO}:${IMAGE_TAG} .
+                aws ecr get-login-password --region ap-south-1 > password.txt
+
+                docker login --username AWS --password-stdin 330372999051.dkr.ecr.ap-south-1.amazonaws.com < password.txt
                 """
             }
         }
-
-        stage('ECR Login') {
-
-            steps {
-
-                withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds']
-                ]) {
-
-                    bat """
-                    aws ecr get-login-password --region %AWS_REGION% > password.txt
-
-                    docker login --username AWS --password-stdin %AWS_ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com < password.txt
-                    """
-                }
-            }
-        }
-
-        stage('Push To ECR') {
-
-            steps {
-
-                bat """
-
-                docker tag ${ECR_REPO}:${IMAGE_TAG} %AWS_ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
-
-                docker push %AWS_ACCOUNT_ID%.dkr.ecr.%AWS_REGION%.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
-                """
-            }
-        }
-
     }
 
-    post {
+    stage('Push To ECR') {
 
-        success {
+        steps {
 
-            echo "Pipeline Completed Successfully"
-        }
+            bat """
+            docker tag ${ECR_REPO}:${IMAGE_TAG} 330372999051.dkr.ecr.ap-south-1.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
 
-        failure {
-
-            echo "Pipeline Failed"
+            docker push 330372999051.dkr.ecr.ap-south-1.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
+            """
         }
     }
+}
+
+post {
+    success {
+        echo "Pipeline Completed Successfully"
+    }
+
+    failure {
+        echo "Pipeline Failed"
+    }
+}
+```
+
 }
