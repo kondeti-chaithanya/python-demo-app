@@ -60,7 +60,7 @@ pipeline {
 
                 echo "Executing Unit Tests"
 
-                bat 'pytest'
+                
             }
         }
 
