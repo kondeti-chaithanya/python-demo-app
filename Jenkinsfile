@@ -21,7 +21,7 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 echo 'Installing dependencies...'
-                bat 'python --version'
+                
             }
         }
 
